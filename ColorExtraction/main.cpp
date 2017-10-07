@@ -42,18 +42,28 @@ cv::Mat findBlueRed(const cv::Mat &frame){
     return result;
 }
 
+inline void correctHSV(uchar *hsv){
+    if (hsv[1] < 50) return;
+    static std::vector<int> hues{0, 122, 179};
+
+    int hue = hsv[0];
+    int mindiff = hue;
+    for (int h : hues){
+        mindiff = std::min(mindiff, std::abs(h - hue));
+    }
+
+    float mult = (61 - mindiff) / 10.0;
+    mult *= mult;
+
+    hsv[2] = std::min((hsv[2] + 1) * mult, (float)255);
+}
 
 cv::Mat increaseBrightness(const cv::Mat frame){
     cv::Mat hsv;
     cv::cvtColor(frame, hsv, CV_BGR2HSV);
     for (int y = 0; y < hsv.rows; y++){
         for (int x = 0; x < hsv.cols; x++){
-            if (hsv.at<uchar>(y, 3*x + 1) > 60){
-                int value = hsv.at<uchar>(y, 3*x + 2);
-                value = (value + 10)*2.5;
-                value = std::min(value, (int)255);
-                hsv.at<uchar>(y, 3*x + 2) = value;
-            }
+            correctHSV(&hsv.at<uchar>(y, 3*x));
         }
     }
     cv::Mat result;
@@ -92,7 +102,19 @@ cv::Mat filterBigComponents(const cv::Mat &br){
     return result;
 }
 
+void saveHSVImage(){
+    cv::Mat hsv(cv::Size(180, 100), CV_8UC3);
+    for (int x = 0; x < 180; x++){
+        cv::Mat slice = hsv(cv::Rect(x, 0, 1, 100));
+        slice = cv::Scalar(x, 255, 255);
+    }
+    cv::Mat bgr;
+    cv::cvtColor(hsv, bgr, CV_HSV2BGR);
+    cv::imwrite("hue.png", bgr);
+}
+
 int main(int argc, char **argv) {
+    //saveHSVImage();
     std::string imagesIn = "/media/mes/f9289561-58c2-46ea-9c7e-42c8e63fb3da/rtsd-d1-frames/train/";
     
     std::vector<std::string> imgpaths;
@@ -110,13 +132,15 @@ int main(int argc, char **argv) {
 
         cv::Mat br = findBlueRed(bright);
 
-        cv::Mat filtered = filterBigComponents(br);
+        //cv::Mat filtered = filterBigComponents(br);
 
         cv::Mat vis;
         cv::vconcat(frame, bright, vis);
         cv::vconcat(vis, br, vis);
-        cv::vconcat(vis, filtered, vis);
-	cv::imwrite("output/" + std::to_string(count++)+".png", vis);
+        //cv::vconcat(vis, filtered, vis);
+
+        cv::resize(vis, vis, cv::Size(), 0.5, 0.5);
+	cv::imwrite("output/" + std::to_string(count++)+".jpg", vis);
     }
 
     return 0;
